@@ -12,10 +12,12 @@ var SEND_MAIL_ADDRESS = ["nozomi@thasegawa.info","nozomi@hasegawa.me"]
 var CC = "";
 var BCC ="";
 
+
 /*********************************************************************
-updateCheck：GoogleDrive内のファイルに更新があったらメールで通知.
-　スプレッドシートに更新ログを記録し、定期的にドライブの日時と比較しログを更新.
-　初回のみドライブへのアクセス、メール送信の承認が必要.
+updateCheck：GoogleDriveの対象フォルダの更新を定期的に確認し,
+　　スプレッドシートで更新ログを管理.
+  　更新があったファイルのZIPと更新ログを添付してメール送信.
+　　初回のみドライブへのアクセス、メール送信の承認が必要.
 　引数：()
 　返却：―
 *********************************************************************/
@@ -25,6 +27,17 @@ function updateCheck() {
 	var folders = targetFolder.getFolders();
 	var files = targetFolder.getFiles();
 
+    // バックアップ実行日(フォーマット整形用JS, yyyy_MM_dd(String))
+    var date = new Date();
+    function formatDate(date) {
+      var y = date.getFullYear();
+      var m = date.getMonth() + 1;
+      var d = date.getDate();
+       if (m < 10) m = "0" + m;
+       if (d < 10) d = "0" + d;
+       return y + "_" + m + "_" + d;
+     }
+    var bkDate = formatDate(date);
   
 
 	/*********************************************************************
@@ -59,13 +72,13 @@ function updateCheck() {
 	}
 	);
 
-	// 更新ログに記載されているフォルダ名と更新日時を取得
+	// 更新ログのフォルダ名と更新日時を取得
 	var updateLog = SpreadsheetApp.openById(UPDATE_LOG_ID);
 	var logName = updateLog.getSheetByName(UPDATE_LOG_NAME);
 	var data = logName.getDataRange().getValues();
 	var logData = {};
 	for (var i = 0; i < data.length; i++) {
-      logData[data[i][0]] = {name : data[i][0], lastUpdate : data[i][1], rowNo : i + 1};
+      logData[data[i][0]] = {name : data[i][0], lastUpdate : data[i][1], rowNo : i + 2};
 	}
 
 	// ドライブの更新日付と更新ログ情報を比較
@@ -79,6 +92,7 @@ function updateCheck() {
 		if(lastUpdateMap[key].lastUpdate > logData[key].lastUpdate) {
 			logName.getRange(logData[key].rowNo, 2).setValue(lastUpdateMap[key].lastUpdate);
 			logName.getRange(logData[key].rowNo, 3).setValue(lastUpdateMap[key].fileId);
+            logName.getRange(logData[key].rowNo, 4).setValue(bkDate);
 			updateFolderMap.push({filename:key, lastUpdate:lastUpdateMap[key].lastUpdate, fileId:lastUpdateMap[key].fileId});
 		}
 	// 新規作成された場合
@@ -87,31 +101,32 @@ function updateCheck() {
 		logName.getRange(newRow, 1).setValue(key);
 		logName.getRange(newRow, 2).setValue(lastUpdateMap[key].lastUpdate);
 		logName.getRange(newRow, 3).setValue(lastUpdateMap[key].fileId);
+        logName.getRange(newRow, 4).setValue(bkDate);
 		updateFolderMap.push({filename:key, lastUpdate:lastUpdateMap[key].lastUpdate, fileId:lastUpdateMap[key].fileId});
 		}
 	}
   
 
     // メール送信処理
-    var subject = targetFolder.getName() + "：バックアップメール";
-    var body = "【" + targetFolder.getName() + "】　以下の通り更新されました。\n\n===================================\n\n";
+    var subject = targetFolder.getName() + "：バックアップ通知";
+    var body = "【" + targetFolder.getName() + "】　が更新されました。\n ◆https://drive.google.com/drive/u/1/folders/" + TARGET_FOLDER_ID + "\n\n===================================\n\n";
     var attachmentFiles = new Array();
   
   　// 更新ファイル単位で処理
     for( key in updateFolderMap ){
       item = updateFolderMap[key];
-      body += item.filename + '　更新日時：' + Utilities.formatDate(item.lastUpdate, "JST", "yyyy-MM-dd HH:mm:ss") + '\n';
+      body += item.filename + "　更新日時：" + Utilities.formatDate(item.lastUpdate, "JST", "yyyy-MM-dd HH:mm:ss") + "\n   ：" + DriveApp.getFileById(item.fileId).getUrl();
       attachmentFiles.push(DriveApp.getFileById(item.fileId).getBlob());
     }
   
     // メール添付用に圧縮
-//  　var zipName = Utilities.formatDate(new Date(), "JST", "yyyyMMdd") + '_backup.zip';
-    var attachment = Utilities.zip(backupFiles, '_backup.zip');
+    var attachment1 = Utilities.zip(attachmentFiles, bkDate + '_bakup.zip');
+    var attachment2 = DriveApp.getFileById(UPDATE_LOG_ID).getBlob();
   
   
   	if (updateFolderMap.length != 0) {
 		SEND_MAIL_ADDRESS.forEach(function(o,i) {
-          MailApp.sendEmail(SEND_MAIL_ADDRESS[i], subject, body, {cc:CC, bcc:BCC, attachments:attachment});
+          MailApp.sendEmail(SEND_MAIL_ADDRESS[i], subject, body, {cc:CC, bcc:BCC, attachments:[attachment1, attachment2]});
           })
     }
 }
