@@ -115,7 +115,7 @@ function updateCheck() {
   　// 更新ファイル単位で処理
     for( key in updateFolderMap ){
       item = updateFolderMap[key];
-      body += item.filename + "　更新日時：" + Utilities.formatDate(item.lastUpdate, "JST", "yyyy-MM-dd HH:mm:ss") + "\n   ：" + DriveApp.getFileById(item.fileId).getUrl();
+      body += item.filename + "　更新日時：" + Utilities.formatDate(item.lastUpdate, "JST", "yyyy-MM-dd HH:mm:ss") + "\n   ：" + DriveApp.getFileById(item.fileId).getUrl()　+ "\n";
       attachmentFiles.push(DriveApp.getFileById(item.fileId).getBlob());
     }
   
